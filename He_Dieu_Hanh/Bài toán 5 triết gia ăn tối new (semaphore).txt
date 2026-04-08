@@ -1,0 +1,179 @@
+Bài toán 5 triết gia ăn tối là một bài toán cổ điển trong lập trình đa luồng. Nó mô tả một bữa ăn tối của n triết gia, mỗi triết gia được đặt trong một chiếc ghế và trên bàn có n đĩa mìn. Các triết gia chỉ có thể ăn khi có đủ 2 đĩa mìn nằm trên bàn ở cạnh mỗi chiếc ghế của họ. Sau khi ăn xong, triết gia sẽ đặt đĩa mìn trở lại bàn và nghỉ ngơi.
+
+Để giải quyết bài toán này, chúng ta có thể sử dụng Semaphore, một công cụ đồng bộ hóa để quản lý truy cập vào tài nguyên chung. Với Semaphore, ta có thể giới hạn số lượng triết gia được phép ăn đồng thời, giảm thiểu tình trạng xung đột giữa các triết gia.
+
+Sau đây là mã nguồn giải quyết bài toán 5 triết gia ăn tối sử dụng Semaphore :
+
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdio.h>
+
+#define N 5
+#define FULL 3
+#define THINKING 2
+#define HUNGRY 1
+#define EATING 0
+#define LEFT (phnum + 4) % N
+#define RIGHT (phnum + 1) % N
+
+int state[N];
+int phil[N] = { 0, 1, 2, 3, 4 };
+
+int count = 0;
+int *p = &count;
+
+sem_t mutex;
+sem_t S[N];
+
+void test(int phnum)
+{
+	if (state[phnum] == HUNGRY
+		&& state[LEFT] != EATING
+		&& state[RIGHT] != EATING) {
+		// state that eating
+		state[phnum] = EATING;
+
+		sleep(2);
+
+		printf("Philosopher %d takes fork %d and %d\n",
+					phnum + 1, LEFT + 1, phnum + 1);
+
+		printf("Philosopher %d is Eating\n", phnum + 1);
+
+		// sem_post(&S[phnum]) has no effect
+		// during takefork
+		// used to wake up hungry philosophers
+		// during putfork
+		sem_post(&S[phnum]);
+	}
+}
+
+// take up chopsticks
+void take_fork(int phnum)
+{
+	if(state[phnum]!=FULL){
+
+	sem_wait(&mutex); //doi dua
+
+	// state that hungry
+	state[phnum] = HUNGRY;
+
+	printf("Philosopher %d is Hungry\n", phnum + 1);
+
+	// eat if neighbours are not eating
+	test(phnum);
+
+	sem_post(&mutex);
+
+	// if unable to eat wait to be signalled
+	if(sem_wait(&S[phnum]))	
+	{
+	
+	printf("Philosopher %d is Thinking\n", phnum + 1);
+	}
+	
+
+	sleep(1);
+	}
+}
+
+// put down chopsticks
+void put_fork(int phnum)
+{
+
+	sem_wait(&mutex);
+
+	// state that thinking
+	state[phnum] = FULL;
+
+	printf("Philosopher %d putting fork %d and %d down\n",
+		phnum + 1, LEFT + 1, phnum + 1);
+	sleep(2);
+	printf("Philosopher %d is full\n", phnum + 1);
+	
+	
+
+
+	test(LEFT);
+	test(RIGHT);
+	
+//	pthread_cancel(phnum);
+
+	sem_post(&mutex);
+}
+
+void* philosopher(void* num)
+{
+
+	while (1) {
+
+		int* i = num;
+
+		sleep(1);
+		
+		if(state[*i] != FULL){
+			take_fork(*i);
+
+			sleep(0);
+
+			put_fork(*i);
+			
+			count++;
+			
+		}
+		if(count == 5)
+			{
+//			printf("All of philosophers are full!");
+			pthread_exit (NULL);
+			}
+
+	
+	}
+}
+
+int main()
+{
+
+	int i;
+	pthread_t thread_id[N];
+
+	// initialize the semaphores
+	sem_init(&mutex, 0, 1);
+
+	for (i = 0; i < N; i++)
+
+		sem_init(&S[i], 0, 0);
+
+	for (i = 0; i < N; i++) {
+
+		// create philosopher processes
+		pthread_create(&thread_id[i], NULL,
+					philosopher, &phil[i]);
+					
+		printf("Philosopher %d is thinking\n", i + 1);
+	}
+
+	for (i = 0; i < N; i++){
+		pthread_join(thread_id[i], NULL);
+	}
+}
+
+Đoạn mã trên giải quyết bài toán 5 triết gia ăn tối sử dụng Semaphore.
+
+Đầu tiên, tại các vùng nhớ được khai báo sẵn, các giá trị mặc định được gán cho các triết gia (được đánh số từ 0 đến 4) và các biến Semaphore.
+
+Sau đó, hàm test được định nghĩa để kiểm tra xem một triết gia có thể ăn được hay không. Nếu triết gia đang đói (có trạng thái HUNGRY) và cả hai triết gia bên cạnh không ăn (không có trạng thái EATING), triết gia này sẽ bắt đầu ăn và giải phóng Semaphore của nó.
+
+Tiếp theo, hàm take_fork được định nghĩa để triết gia lấy đũa ăn. Nếu triết gia chưa ăn no (FULL), triết gia sẽ bắt đầu đói (trạng thái HUNGRY), hiển thị thông báo "Philosopher (triết gia) đang đói", kiểm tra xem hai triết gia bên cạnh có đang ăn không, nếu không thì triết gia sẽ bắt đầu ăn, hiển thị thông báo "Philosopher (triết gia) đang ăn" và giải phóng Semaphore của nó.
+
+Nếu triết gia không thể ăn được, triết gia sẽ chờ đợi đến khi Semaphore của nó được giải phóng trong hàm put_fork. Hàm put_fork được định nghĩa để triết gia đặt đũa xuống sau khi ăn xong. Triết gia sẽ thực hiện hành động đặt đũa, hiển thị thông báo "Philosopher (triết gia) đặt đũa xuống" và cập nhật trạng thái của triết gia và hai triết gia bên cạnh, sau đó kiểm tra xem hai triết gia bên cạnh có thể ăn được không và giải phóng Semaphore của hai triết gia đó.
+
+Hàm philosopher là hàm chính để quản lý hoạt động của mỗi triết gia. Trong hàm này, mỗi triết gia sẽ lặp vô hạn, hiển thị thông báo "Philosopher (triết gia) đang suy nghĩ", gọi hàm take_fork để lấy đũa ăn, sau đó gọi hàm put_fork để đặt đũa xuống sau khi ăn xong.
+
+Cuối cùng, trong hàm main, khởi tạo Semaphore và tạo ra các tiến trình triết gia sử dụng pthread_create. Sau đó, sử dụng vòng lặp for để gọi pthread_join để đợi cho các tiến trình triết gia kết thúc trước khi kết thúc chương trình.
+
+Trong hàm main, đầu tiên sử dụng sem_init để khởi tạo Semaphore mutex và một mảng Semaphore S gồm N phần tử. Giá trị khởi tạo của Semaphore mutex được đặt là 1 để chỉ có một tiến trình được phép truy cập vào các biến trạng thái của triết gia cùng một lúc. Các Semaphore trong mảng S được khởi tạo là 0 để đánh dấu các triết gia đang chờ đợi được phục vụ.
+
+Sau đó, sử dụng vòng lặp for để tạo ra N tiến trình triết gia bằng cách sử dụng pthread_create và truyền vào địa chỉ của phần tử tương ứng trong mảng triết gia. Trong quá trình tạo tiến trình, in ra thông báo cho biết triết gia đang suy nghĩ.
+
+Cuối cùng, sử dụng vòng lặp for để gọi pthread_join và đợi cho tất cả các tiến trình triết gia kết thúc trước khi kết thúc chương trình.
